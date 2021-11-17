@@ -1,0 +1,6 @@
+
+# auto generated wildcard
+.env
+node_modules
+resources
+mta_archives

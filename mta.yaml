@@ -1,0 +1,125 @@
+_schema-version: "3.1"
+ID: FreestyleCode
+description: A simple CAP project.
+version: 1.0.0
+modules:
+- name: FreestyleCode-srv
+  type: nodejs
+  path: gen/srv
+  requires:
+  - name: FreestyleCode-db
+  provides:
+  - name: srv-api
+    properties:
+      srv-url: ${default-url}
+  parameters:
+    buildpack: nodejs_buildpack
+- name: FreestyleCode-db-deployer
+  type: hdb
+  path: gen/db
+  requires:
+  - name: FreestyleCode-db
+  parameters:
+    buildpack: nodejs_buildpack
+- name: FreestyleCode-app-content
+  type: com.sap.application.content
+  path: .
+  requires:
+  - name: FreestyleCode-repo-host
+    parameters:
+      content-target: true
+  build-parameters:
+    build-result: resources
+    requires:
+    - artifacts:
+      - comgaboappscodesnippetapp.zip
+      name: comgaboappscodesnippetapp
+      target-path: resources/
+- name: comgaboappscodesnippetapp
+  type: html5
+  path: app/code-snippet-app
+  build-parameters:
+    build-result: dist
+    builder: custom
+    commands:
+    - npm install
+    - npm run build:cf
+    supported-platforms: []
+- name: FreestyleCode-destination-content
+  type: com.sap.application.content
+  requires:
+  - name: FreestyleCode-dest-srv
+    parameters:
+      content-target: true
+  - name: FreestyleCode-repo-host
+    parameters:
+      service-key:
+        name: FreestyleCode-repo-host-key
+  - name: uaa_FreestyleCode
+    parameters:
+      service-key:
+        name: uaa_FreestyleCode-key
+  parameters:
+    content:
+      instance:
+        destinations:
+        - Name: freestylecode_apps_bs_FreestyleCode_repo_host
+          ServiceInstanceName: FreestyleCode-html5-srv
+          ServiceKeyName: FreestyleCode-repo-host-key
+          sap.cloud.service: freestylecode_apps_bs
+        - Authentication: OAuth2UserTokenExchange
+          Name: freestylecode_apps_bs_uaa_FreestyleCode
+          ServiceInstanceName: FreestyleCode-xsuaa-service
+          ServiceKeyName: uaa_FreestyleCode-key
+          sap.cloud.service: freestylecode_apps_bs
+        existing_destinations_policy: ignore
+  build-parameters:
+    no-source: true
+resources:
+- name: FreestyleCode-db
+  type: com.sap.xs.hdi-container
+  parameters:
+    service: hana
+    service-plan: hdi-shared
+  properties:
+    hdi-service-name: ${service-name}
+- name: FreestyleCode-repo-host
+  type: org.cloudfoundry.managed-service
+  parameters:
+    service: html5-apps-repo
+    service-name: FreestyleCode-html5-srv
+    service-plan: app-host
+- name: FreestyleCode-dest-srv
+  type: org.cloudfoundry.managed-service
+  parameters:
+    config:
+      HTML5Runtime_enabled: false
+      init_data:
+        instance:
+          destinations:
+          - Authentication: NoAuthentication
+            Name: ui5
+            ProxyType: Internet
+            Type: HTTP
+            URL: https://ui5.sap.com
+          existing_destinations_policy: update
+      version: 1.0.0
+    service: destination
+    service-name: FreestyleCode-dest-srv
+    service-plan: lite
+- name: uaa_FreestyleCode
+  type: org.cloudfoundry.managed-service
+  parameters:
+    path: ./xs-security.json
+    service: xsuaa
+    service-name: FreestyleCode-xsuaa-service
+    service-plan: application
+parameters:
+  deploy_mode: html5-repo
+  enable-parallel-deployments: true
+build-parameters:
+  before-all:
+  - builder: custom
+    commands:
+    - npm install --production
+    - npx -p @sap/cds-dk cds build --production
